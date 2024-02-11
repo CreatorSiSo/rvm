@@ -12,6 +12,8 @@ The first three bytes define the format version to use:
 
 The next 2 bytes store how many opcodes come after it as a `u16` with big endianness.
 
+**TODO**
+
 #### Examples
 
 ```
