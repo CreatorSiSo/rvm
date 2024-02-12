@@ -4,6 +4,7 @@ const mem = std.mem;
 const Endian = std.builtin.Endian;
 const debug = std.debug;
 const panic = debug.panic;
+const expect = std.testing.expect;
 
 const Self = @This();
 
@@ -22,32 +23,69 @@ pub const DeserializeError = error{
     Version,
     OpCodeLength,
     OpCode,
+    OpCodesEmpty,
     ConstantLength,
     Constant,
 };
 
-pub const OpCode = packed struct(u32) {
-    kind: enum(u8) {
-        /// Halt programm, result is at the top of the stack
-        Halt = 0x00,
-        /// Push value of `Self.data`
-        LoadInline = 0x01,
-        /// Push value of constant with index `Self.data`
-        LoadConstant = 0x02,
-        /// Push value of global with index `Self.data`
-        LoadGlobal = 0x03,
-    },
-    data: u24,
+pub const OpCode = union(enum(u8)) {
+    /// Halt programm, result is at the top of the stack
+    Halt = 0,
+    /// Push value of `Self.data`
+    LoadInline: u24 = 1,
+    /// Push value of constant with index `Self.data`
+    LoadConstant: u24 = 2,
+    /// Push value of global with index `Self.data`
+    LoadGlobal: u24 = 3,
+    /// Relative jump
+    Jump: i24 = 4,
+
+    pub fn init(tag: u8, data: u24) OpCode {
+        return switch (tag) {
+            0 => OpCode.Halt,
+            1 => OpCode{ .LoadInline = data },
+            2 => OpCode{ .LoadConstant = data },
+            3 => OpCode{ .LoadGlobal = data },
+            4 => OpCode{ .Jump = @bitCast(data) },
+            else => unreachable,
+        };
+    }
+
+    pub fn serialize(self: OpCode) u32 {
+        var result: u24 = 0;
+        switch (self) {
+            .Halt => {},
+            .LoadConstant, .LoadGlobal, .LoadInline => |data| result = data,
+            .Jump => |data| result = @bitCast(data),
+        }
+        // if (@import("builtin").target.cpu.arch.endian() == Endian.little) {
+        //     result = @byteSwap(result);
+        // }
+        return (@as(u32, @intFromEnum(self)) << 24) | result;
+    }
 
     pub fn print(self: OpCode, writer: io.AnyWriter) !void {
-        try writer.print("    [{x:0>2}{x:0>6}] {s}, {}\n", .{
-            @intFromEnum(self.kind),
-            self.data,
-            @tagName(self.kind),
-            self.data,
+        try writer.print("    [{x:0>8}] {s}, ", .{
+            self.serialize(),
+            @tagName(self),
         });
+        switch (self) {
+            .Halt => {},
+            .LoadInline, .LoadConstant, .LoadGlobal => |data| {
+                try writer.print("{}", .{data});
+            },
+            .Jump => |data| {
+                try writer.print("{}", .{data});
+            },
+        }
+        try writer.writeAll("\n");
     }
 };
+
+test "OpCode size" {
+    const opcode = OpCode{.Halt};
+    try expect(@sizeOf(opcode) == 4);
+}
 
 pub fn deinit(self: *const Self) void {
     self.allocator.free(self.constants);
@@ -80,9 +118,12 @@ fn deserialize_opcodes(allocator: mem.Allocator, reader: io.AnyReader) error{ Op
         panic("Out of memory", .{});
     };
     for (0..opcode_len) |i| {
-        opcodes[i] = reader.readStructEndian(OpCode, Endian.big) catch {
-            return error.OpCode;
-        };
+        opcodes[i] = OpCode.init(
+            reader.readByte() catch
+                return error.OpCode,
+            reader.readInt(u24, Endian.big) catch
+                return error.OpCode,
+        );
     }
     return opcodes;
 }

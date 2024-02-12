@@ -11,13 +11,18 @@ ip: *Chunk.OpCode,
 stack: std.ArrayList(u64),
 allocator: mem.Allocator,
 
-pub fn init(allocator: mem.Allocator, chunk: Chunk) Self {
-    return Self{
+pub fn init(allocator: mem.Allocator, chunk: Chunk) error{OpCodesEmpty}!Self {
+    if (chunk.opcodes.len == 0) {
+        return error.OpCodesEmpty;
+    }
+    var self = Self{
         .chunk = chunk,
-        .ip = &chunk.opcodes[0],
+        .ip = undefined,
         .stack = std.ArrayList(u64).init(allocator),
         .allocator = allocator,
     };
+    self.ip = &self.chunk.opcodes[0];
+    return self;
 }
 
 pub fn deinit(self: *const Self) void {

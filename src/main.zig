@@ -23,6 +23,7 @@ pub fn main() !void {
             error.Version => scope.err("Could not read version", .{}),
             error.OpCodeLength => scope.err("Could not read opcodes length", .{}),
             error.OpCode => scope.err("Could not read opcode", .{}),
+            error.OpCodesEmpty => scope.err("Opcodes are empty", .{}),
             error.ConstantLength => scope.err("Could not read constants length", .{}),
             error.Constant => scope.err("Could not read constant", .{}),
         }
