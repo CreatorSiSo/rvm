@@ -4,7 +4,7 @@ const mem = std.mem;
 const Endian = std.builtin.Endian;
 const debug = std.debug;
 const panic = debug.panic;
-const expect = std.testing.expect;
+const testing = std.testing;
 
 const Self = @This();
 
@@ -23,59 +23,58 @@ pub const DeserializeError = error{
     Version,
     OpCodeLength,
     OpCode,
-    OpCodesEmpty,
     ConstantLength,
     Constant,
 };
 
-pub const OpCode = union(enum(u8)) {
-    /// Halt programm, result is at the top of the stack
-    Halt = 0,
-    /// Push value of `Self.data`
-    LoadInline: u24 = 1,
-    /// Push value of constant with index `Self.data`
-    LoadConstant: u24 = 2,
-    /// Push value of global with index `Self.data`
-    LoadGlobal: u24 = 3,
-    /// Relative jump
-    Jump: i24 = 4,
+pub const OpCode = packed struct(u32) {
+    const Tag = enum(u8) {
+        /// Halt programm, result is at the top of the stack
+        Halt = 0,
+        /// Push value of `Self.data`
+        LoadInline = 1,
+        /// Push value of constant with index `Self.data`
+        LoadConstant = 2,
+        /// Push value of global with index `Self.data`
+        LoadGlobal = 3,
+        /// Relative jump
+        Jump = 4,
+    };
+    const Data = packed union {
+        uint: u24,
+        int: i24,
+        bytes: packed struct(u24) { first: u8, second: u8, third: u8 },
+    };
+
+    tag: Tag,
+    data: Data,
 
     pub fn init(tag: u8, data: u24) OpCode {
-        return switch (tag) {
-            0 => OpCode.Halt,
-            1 => OpCode{ .LoadInline = data },
-            2 => OpCode{ .LoadConstant = data },
-            3 => OpCode{ .LoadGlobal = data },
-            4 => OpCode{ .Jump = @bitCast(data) },
-            else => unreachable,
+        return OpCode{
+            .tag = @enumFromInt(tag),
+            .data = Data{ .uint = data },
         };
     }
 
     pub fn serialize(self: OpCode) u32 {
-        var result: u24 = 0;
-        switch (self) {
-            .Halt => {},
-            .LoadConstant, .LoadGlobal, .LoadInline => |data| result = data,
-            .Jump => |data| result = @bitCast(data),
-        }
         // if (@import("builtin").target.cpu.arch.endian() == Endian.little) {
         //     result = @byteSwap(result);
         // }
-        return (@as(u32, @intFromEnum(self)) << 24) | result;
+        return (@as(u32, @intFromEnum(self.tag)) << 24) | self.data.uint;
     }
 
     pub fn print(self: OpCode, writer: io.AnyWriter) !void {
-        try writer.print("    [{x:0>8}] {s}, ", .{
+        try writer.print("    [{x:0>8}] {s}", .{
             self.serialize(),
-            @tagName(self),
+            @tagName(self.tag),
         });
-        switch (self) {
+        switch (self.tag) {
             .Halt => {},
-            .LoadInline, .LoadConstant, .LoadGlobal => |data| {
-                try writer.print("{}", .{data});
+            .LoadInline, .LoadConstant, .LoadGlobal => {
+                try writer.print(", {}", .{self.data.uint});
             },
-            .Jump => |data| {
-                try writer.print("{}", .{data});
+            .Jump => {
+                try writer.print(", {}", .{self.data.int});
             },
         }
         try writer.writeAll("\n");
@@ -83,8 +82,7 @@ pub const OpCode = union(enum(u8)) {
 };
 
 test "OpCode size" {
-    const opcode = OpCode{.Halt};
-    try expect(@sizeOf(opcode) == 4);
+    try testing.expect(@sizeOf(OpCode) == 4);
 }
 
 pub fn deinit(self: *const Self) void {

@@ -3,6 +3,7 @@ const io = std.io;
 const log = std.log;
 
 const VirtualMachine = @import("./VirtualMachine.zig");
+const Chunk = @import("./Chunk.zig");
 
 pub fn main() !void {
     const scope = log.scoped(.main);
@@ -10,27 +11,38 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    const stdin_file = io.getStdIn().reader();
-    var stdin_buffered = io.bufferedReader(stdin_file);
+    var stdin_buffered = io.bufferedReader(io.getStdIn().reader());
     const stdin = stdin_buffered.reader();
 
-    const stdout_file = io.getStdOut().writer();
-    var stdout_buffered = io.bufferedWriter(stdout_file);
-    const stdout = stdout_buffered.writer();
+    var stdout_buffered = io.bufferedWriter(io.getStdOut().writer());
+    // const stdout = stdout_buffered.writer();
 
-    const vm = VirtualMachine.from_bytes(allocator, stdin.any()) catch |err| {
+    var stderr_buffered = io.bufferedWriter(io.getStdErr().writer());
+    const stderr = stderr_buffered.writer();
+
+    const chunk = Chunk.deserialize(allocator, stdin.any()) catch |err| {
         switch (err) {
             error.Version => scope.err("Could not read version", .{}),
             error.OpCodeLength => scope.err("Could not read opcodes length", .{}),
             error.OpCode => scope.err("Could not read opcode", .{}),
-            error.OpCodesEmpty => scope.err("Opcodes are empty", .{}),
             error.ConstantLength => scope.err("Could not read constants length", .{}),
             error.Constant => scope.err("Could not read constant", .{}),
         }
         std.process.exit(1);
     };
+
+    var vm = VirtualMachine.init(allocator, chunk);
     defer vm.deinit();
 
-    try vm.print(stdout.any());
+    try vm.print(stderr.any());
+    const result = vm.eval();
+    try stderr.print("\nresult: {}\n", .{result});
+
     try stdout_buffered.flush();
+    try stderr_buffered.flush();
+}
+
+// Without this no test outside of main.zig get run
+test {
+    std.testing.refAllDecls(@This());
 }

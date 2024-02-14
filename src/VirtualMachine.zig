@@ -11,9 +11,25 @@ ip: *Chunk.OpCode,
 stack: std.ArrayList(u64),
 allocator: mem.Allocator,
 
-pub fn init(allocator: mem.Allocator, chunk: Chunk) error{OpCodesEmpty}!Self {
+const ValueTag = enum(u8) {
+    Uint = 1,
+    Int = 2,
+    Float = 3,
+};
+
+const Value = packed union {
+    Uint: u64,
+    Int: i64,
+    Float: f64,
+};
+
+test "Value size" {
+    try std.testing.expectEqual(@sizeOf(Value), 8);
+}
+
+pub fn init(allocator: mem.Allocator, chunk: Chunk) Self {
     if (chunk.opcodes.len == 0) {
-        return error.OpCodesEmpty;
+        return std.debug.panic("Opcodes empty", .{});
     }
     var self = Self{
         .chunk = chunk,
@@ -30,9 +46,9 @@ pub fn deinit(self: *const Self) void {
     self.stack.deinit();
 }
 
-pub fn from_bytes(allocator: mem.Allocator, reader: io.AnyReader) Chunk.DeserializeError!Self {
-    const chunk = try Chunk.deserialize(allocator, reader);
-    return init(allocator, chunk);
+pub fn eval(self: *Self) u64 {
+    _ = self;
+    return 0;
 }
 
 pub fn print(self: *const Self, writer: io.AnyWriter) !void {
