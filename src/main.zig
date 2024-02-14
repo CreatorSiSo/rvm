@@ -35,7 +35,8 @@ pub fn main() !void {
     defer vm.deinit();
 
     try vm.print(stderr.any());
-    const result = vm.eval();
+    const result = try vm.eval();
+    try vm.print(stderr.any());
     try stderr.print("\nresult: {}\n", .{result});
 
     try stdout_buffered.flush();

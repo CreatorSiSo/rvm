@@ -28,19 +28,17 @@ pub const DeserializeError = error{
 };
 
 pub const OpCode = packed struct(u32) {
-    const Tag = enum(u8) {
+    pub const Tag = enum(u8) {
         /// Halt programm, result is at the top of the stack
         Halt = 0,
-        /// Push value of `Self.data`
-        LoadInline = 1,
         /// Push value of constant with index `Self.data`
-        LoadConstant = 2,
+        LoadConstant = 1,
         /// Push value of global with index `Self.data`
-        LoadGlobal = 3,
+        LoadGlobal = 2,
         /// Relative jump
-        Jump = 4,
+        Jump = 3,
     };
-    const Data = packed union {
+    pub const Data = packed union {
         uint: u24,
         int: i24,
         bytes: packed struct(u24) { first: u8, second: u8, third: u8 },
@@ -64,20 +62,19 @@ pub const OpCode = packed struct(u32) {
     }
 
     pub fn print(self: OpCode, writer: io.AnyWriter) !void {
-        try writer.print("    [{x:0>8}] {s}", .{
+        try writer.print("[{x:0>8}] {s}", .{
             self.serialize(),
             @tagName(self.tag),
         });
         switch (self.tag) {
             .Halt => {},
-            .LoadInline, .LoadConstant, .LoadGlobal => {
+            .LoadConstant, .LoadGlobal => {
                 try writer.print(", {}", .{self.data.uint});
             },
             .Jump => {
                 try writer.print(", {}", .{self.data.int});
             },
         }
-        try writer.writeAll("\n");
     }
 };
 
@@ -140,18 +137,4 @@ fn deserialize_constants(allocator: mem.Allocator, reader: io.AnyReader) error{ 
     }
 
     return constants;
-}
-
-pub fn print(self: *const Self, writer: io.AnyWriter) !void {
-    // try writer.print("version: {}.{}.{}\n", self.version);
-
-    try writer.print("opcodes:\n", .{});
-    for (self.opcodes) |opcode| {
-        try opcode.print(writer);
-    }
-
-    try writer.print("constants:\n", .{});
-    for (self.constants) |constant| {
-        try writer.print("    [{x:0>16}] {}\n", .{ constant, constant });
-    }
 }
