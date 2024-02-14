@@ -17,8 +17,7 @@ pub fn main() !void {
     var stdout_buffered = io.bufferedWriter(io.getStdOut().writer());
     // const stdout = stdout_buffered.writer();
 
-    var stderr_buffered = io.bufferedWriter(io.getStdErr().writer());
-    const stderr = stderr_buffered.writer();
+    const stderr = io.getStdErr().writer();
 
     const chunk = Chunk.deserialize(allocator, stdin.any()) catch |err| {
         switch (err) {
@@ -40,7 +39,6 @@ pub fn main() !void {
     try stderr.print("\nresult: {}\n", .{result});
 
     try stdout_buffered.flush();
-    try stderr_buffered.flush();
 }
 
 // Without this no test outside of main.zig get run

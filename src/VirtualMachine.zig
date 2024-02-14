@@ -56,7 +56,14 @@ pub fn eval(self: *Self) !u64 {
                 try self.stack.append(value);
             },
             OpCode.Tag.LoadGlobal => {},
-            OpCode.Tag.Jump => {},
+            OpCode.Tag.Jump => {
+                if (opcode.data.int < 0) {
+                    self.ip -= @intCast(-opcode.data.int);
+                } else {
+                    self.ip += @intCast(opcode.data.int);
+                }
+                continue;
+            },
         }
 
         self.ip += 1;
